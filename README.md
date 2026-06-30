@@ -4,7 +4,7 @@ A browser-based tool for recording positive and negative wake word samples for t
 
 ## What it does
 
-- **Positive samples**: Record yourself saying your wake word ("trilogy", "hey trilogy", etc.)
+- **Positive samples**: Record yourself saying your wake word ("alfred", "hey alfred", etc.)
 - **Negative samples**: Record words that should *not* trigger your wake word ("alexa", "hey siri", "ok google", names of family members, etc.)
 - **Manual mode**: Click record, say the word, click stop. Review, then keep or discard.
 - **Batch mode**: Walk away from the mic, a 3-second countdown gives you time to reach your testing distance, then it auto-records for a fixed duration. Recordings stack up for review.
@@ -34,7 +34,7 @@ The recorder integrates with the [microWakeWord Trainer](https://github.com/Tate
 
 | Type | Pattern | Example |
 |---|---|---|
-| Positive | `{wake_word}_real_{timestamp}.wav` | `trilogy_real_1719654321000.wav` |
+| Positive | `{wake_word}_real_{timestamp}.wav` | `alfred_real_1719654321000.wav` |
 | Negative | `negative_{word}_{timestamp}.wav` | `negative_alexa_1719654321000.wav` |
 
 ## Where files go
@@ -56,8 +56,8 @@ Edit the `<select id="wordSelect">` in `index.html` to add your own wake words:
 
 ```html
 <select id="wordSelect" class="word-select">
-  <option value="your_word">your_word</option>
-  <option value="hey_your_word">hey_your_word</option>
+  <option value="alfred">alfred</option>
+  <option value="hey_alfred">hey_alfred</option>
 </select>
 ```
 
