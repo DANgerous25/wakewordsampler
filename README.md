@@ -1,6 +1,6 @@
 # WakeWord Sampler
 
-A browser-based tool for recording positive and negative wake word samples for training [microWakeWord](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon) models.
+A browser-based tool for recording positive and negative wake word samples for training custom wake word models — works with [microWakeWord](https://github.com/TaterTotterson/microWakeWord-Trainer-AppleSilicon), [openWakeWord](https://github.com/dscripka/openWakeWord), and any other model trainer that accepts WAV sample files.
 
 ## What it does
 
@@ -9,7 +9,7 @@ A browser-based tool for recording positive and negative wake word samples for t
 - **Manual mode**: Click record, say the word, click stop. Review, then keep or discard.
 - **Batch mode**: Walk away from the mic, a 3-second countdown gives you time to reach your testing distance, then it auto-records for a fixed duration. Recordings stack up for review.
 
-All audio is captured at **16 kHz mono** — the format microWakeWord expects. Silence is auto-trimmed with 100ms padding. Output is WAV.
+All audio is captured at **16 kHz mono** — the standard format for wake word model training. Silence is auto-trimmed with 100ms padding. Output is 16-bit PCM WAV, compatible with microWakeWord, openWakeWord, and most other wake word trainers that accept WAV sample files.
 
 ## Quick start
 
