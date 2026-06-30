@@ -1,0 +1,4 @@
+name: WakeWord Sampler
+description: Browser-based wake word sample recorder for microWakeWord training
+version: 1.0.0
+license: MIT

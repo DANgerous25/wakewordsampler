@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Wake Word Sample Recorder</title>
+<style>
+body { font-family: -apple-system, sans-serif; max-width: 700px; margin: 20px auto; padding: 0 20px; background: #1a1a2e; color: #eee; }
+h1 { font-size: 1.3em; }
+.info { background: #16213e; padding: 12px; border-radius: 8px; margin: 10px 0; font-size: 0.9em; }
+.mode-tabs { display: flex; gap: 5px; margin: 10px 0; }
+.mode-tabs button { flex: 1; padding: 10px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.95em; }
+.mode-tabs button.active { background: #0f3460; color: white; }
+.mode-tabs button:not(.active) { background: #333; color: #aaa; }
+.sample-type-tabs { display: flex; gap: 5px; margin: 5px 0; }
+.sample-type-tabs button { flex: 1; padding: 8px; border: none; border-radius: 8px; cursor: pointer; font-size: 0.9em; }
+.sample-type-tabs button.active.positive { background: #16c79a; color: white; }
+.sample-type-tabs button.active.negative { background: #e94560; color: white; }
+.sample-type-tabs button:not(.active) { background: #333; color: #aaa; }
+.controls { text-align: center; margin: 15px 0; }
+button { font-size: 1.1em; padding: 12px 30px; margin: 5px; border-radius: 8px; border: none; cursor: pointer; }
+button:disabled { opacity: 0.4; cursor: default; }
+#recordBtn { background: #e94560; color: white; }
+#recordBtn.recording { background: #c0392b; animation: pulse 1s infinite; }
+@keyframes pulse { 0%{opacity:1} 50%{opacity:0.6} 100%{opacity:1} }
+#startBatchBtn { background: #e94560; color: white; }
+#stopBatchBtn { background: #c0392b; color: white; }
+.counter { font-size: 1.5em; font-weight: bold; margin: 10px; }
+.status { font-size: 0.9em; color: #aaa; margin: 5px; min-height: 20px; }
+.word-select { font-size: 1em; padding: 8px; margin: 10px 0; border-radius: 8px; background: #16213e; color: #eee; border: 1px solid #333; }
+.duration-select { font-size: 1em; padding: 8px; margin: 10px 0; border-radius: 8px; background: #16213e; color: #eee; border: 1px solid #333; }
+.batch-timer { font-size: 2em; font-weight: bold; color: #e94560; margin: 5px; }
+.recordings { margin: 15px 0; }
+.recording-item { display: flex; align-items: center; gap: 10px; padding: 8px; background: #16213e; border-radius: 8px; margin: 5px 0; }
+.recording-item audio { height: 32px; flex: 1; }
+.recording-item .label { min-width: 80px; font-size: 0.85em; color: #aaa; }
+.recording-item button { padding: 6px 12px; font-size: 0.85em; margin: 0; }
+.keep-btn { background: #16c79a; color: white; }
+.discard-btn { background: #c0392b; color: white; }
+.saved-badge { color: #16c79a; font-size: 0.85em; }
+.countdown-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.8); display: none; justify-content: center; align-items: center; z-index: 999; }
+.countdown-number { font-size: 5em; color: #e94560; }
+</style>
+</head>
+<body>
+<h1>Wake Word Sample Recorder</h1>
+<div class="info">
+  <b>Manual mode:</b> Click Record, say the word, click Stop.<br>
+  <b>Batch mode:</b> Click Start, walk to your distance, wait for the beep/counter, say the word.
+  Auto-records for a fixed duration, auto-trims, stacks recordings for review.
+</div>
+
+<div>
+  <select id="wordSelect" class="word-select">
+    <option value="trilogy">trilogy</option>
+    <option value="hey_trilogy">hey_trilogy</option>
+  </select>
+  <select id="durationSelect" class="duration-select">
+    <option value="3">3 sec auto-stop</option>
+    <option value="5" selected>5 sec auto-stop</option>
+    <option value="7">7 sec auto-stop</option>
+    <option value="10">10 sec auto-stop</option>
+  </select>
+</div>
+
+<div class="sample-type-tabs">
+  <button id="positiveTab" class="active positive" onclick="setSampleType('positive')">Positive (wake word)</button>
+  <button id="negativeTab" class="negative" onclick="setSampleType('negative')">Negative (false trigger words)</button>
+</div>
+<div id="negativeWordInput" style="display:none; margin:5px 0;">
+  <input type="text" id="negativeWord" placeholder="e.g. alexa, nikki, fred" style="font-size:1em; padding:8px; border-radius:8px; background:#16213e; color:#eee; border:1px solid #333; width:100%;">
+  <small style="color:#aaa;">Say these words — they should NOT trigger the wake word. Recordings go to negative_samples/.</small>
+</div>
+
+<div class="mode-tabs">
+  <button id="manualTab" class="active" onclick="setMode('manual')">Manual</button>
+  <button id="batchTab" onclick="setMode('batch')">Batch (walk-away)</button>
+</div>
+
+<div class="counter"><span id="count">26</span> samples saved</div>
+
+<div id="manualControls" class="controls">
+  <button id="recordBtn">Record</button>
+  <button id="playBtn" disabled>Play</button>
+  <button id="saveBtn" disabled>Save</button>
+  <button id="skipBtn" disabled>Skip</button>
+</div>
+
+<div id="batchControls" class="controls" style="display:none;">
+  <button id="startBatchBtn">Start Batch</button>
+  <button id="stopBatchBtn" disabled>Stop Batch</button>
+  <div class="batch-timer" id="batchTimer"></div>
+</div>
+
+<div class="status" id="status">Ready</div>
+<audio id="audio" controls style="width:100%;display:none;"></audio>
+
+<div class="recordings" id="recordingsList"></div>
+
+<div class="countdown-overlay" id="countdownOverlay">
+  <div class="countdown-number" id="countdownNumber"></div>
+</div>
+
+<script>
+let mode = "manual";
+let sampleType = "positive";
+let mediaRecorder, audioChunks = [], audioBlob, audioUrl, audioCtx;
+let recording = false, savedCount = 26, negSavedCount = 0, stream;
+let batchRecordings = [];
+let batchTimerInterval, countdownInterval;
+
+const recordBtn = document.getElementById("recordBtn");
+const playBtn = document.getElementById("playBtn");
+const saveBtn = document.getElementById("saveBtn");
+const skipBtn = document.getElementById("skipBtn");
+const status = document.getElementById("status");
+const count = document.getElementById("count");
+const wordSelect = document.getElementById("wordSelect");
+const durationSelect = document.getElementById("durationSelect");
+const recordingsList = document.getElementById("recordingsList");
+const countdownOverlay = document.getElementById("countdownOverlay");
+const countdownNumber = document.getElementById("countdownNumber");
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("manualControls").style.display = m === "manual" ? "block" : "none";
+  document.getElementById("batchControls").style.display = m === "batch" ? "block" : "none";
+  document.getElementById("manualTab").classList.toggle("active", m === "manual");
+  document.getElementById("batchTab").classList.toggle("active", m === "batch");
+  status.textContent = m === "batch" ? "Click Start Batch, then walk away and say the word when the timer hits 0" : "Ready";
+}
+
+function setSampleType(t) {
+  sampleType = t;
+  document.getElementById("positiveTab").classList.toggle("active", t === "positive");
+  document.getElementById("negativeTab").classList.toggle("active", t === "negative");
+  document.getElementById("negativeWordInput").style.display = t === "negative" ? "block" : "none";
+  const label = document.querySelector(".counter");
+  if (t === "negative") {
+    label.innerHTML = '<span id="negCount">0</span> negative samples saved';
+    status.textContent = "NEGATIVE mode: Record words that should NOT trigger the wake word (alexa, nikki, fred, etc.)";
+  } else {
+    label.innerHTML = '<span id="count">' + savedCount + '</span> samples saved';
+    status.textContent = "Ready";
+  }
+}
+
+async function getStream() {
+  return await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, sampleRate: 16000, echoCancellation: true, noiseSuppression: true } });
+}
+
+// === MANUAL MODE ===
+async function startRecording() {
+  try { stream = await getStream(); } catch(e) { status.textContent = "Mic error: " + e.message; return; }
+  mediaRecorder = new MediaRecorder(stream);
+  audioChunks = [];
+  mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+  mediaRecorder.onstop = processAndShow;
+  mediaRecorder.start();
+  recording = true;
+  recordBtn.textContent = "Stop";
+  recordBtn.classList.add("recording");
+  status.textContent = "Recording...";
+}
+
+function stopRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  recording = false;
+  recordBtn.textContent = "Record";
+  recordBtn.classList.remove("recording");
+}
+
+recordBtn.onclick = () => { if (recording) stopRecording(); else startRecording(); };
+
+async function processAndShow() {
+  status.textContent = "Processing...";
+  audioBlob = new Blob(audioChunks, { type: "audio/webm" });
+  const processed = await processAudio(audioBlob);
+  audioBlob = processed.wav;
+  audioUrl = processed.url;
+  document.getElementById("audio").src = audioUrl;
+  document.getElementById("audio").style.display = "block";
+  playBtn.disabled = false; saveBtn.disabled = false; skipBtn.disabled = false;
+  status.textContent = "Trimmed: " + processed.duration + "s - Play/Save/Skip";
+}
+
+playBtn.onclick = () => document.getElementById("audio").play();
+
+saveBtn.onclick = async () => {
+  saveBtn.disabled = true;
+  await saveToServer(audioBlob, wordSelect.value);
+  playBtn.disabled = true; skipBtn.disabled = true;
+  document.getElementById("audio").style.display = "none";
+  status.textContent = "Saved! Click Record for the next one.";
+};
+
+skipBtn.onclick = () => {
+  playBtn.disabled = true; saveBtn.disabled = true; skipBtn.disabled = true;
+  document.getElementById("audio").style.display = "none";
+  status.textContent = "Ready";
+};
+
+// === BATCH MODE ===
+document.getElementById("startBatchBtn").onclick = async () => {
+  try { stream = await getStream(); } catch(e) { status.textContent = "Mic error: " + e.message; return; }
+  document.getElementById("startBatchBtn").disabled = true;
+  document.getElementById("stopBatchBtn").disabled = false;
+  batchRecordings = [];
+  recordingsList.innerHTML = "";
+  status.textContent = "Batch running - walk away and say the word after each beep";
+  runBatchCycle();
+};
+
+document.getElementById("stopBatchBtn").onclick = () => {
+  document.getElementById("startBatchBtn").disabled = false;
+  document.getElementById("stopBatchBtn").disabled = true;
+  if (recording) stopBatchRecording();
+  clearInterval(batchTimerInterval);
+  status.textContent = "Batch stopped. Review recordings below.";
+  if (stream) stream.getTracks().forEach(t => t.stop());
+};
+
+async function runBatchCycle() {
+  if (document.getElementById("stopBatchBtn").disabled) return;
+
+  // 3-second countdown
+  let countdown = 3;
+  countdownOverlay.style.display = "flex";
+  countdownNumber.textContent = countdown;
+  status.textContent = "Get ready...";
+
+  countdownInterval = setInterval(() => {
+    countdown--;
+    if (countdown > 0) {
+      countdownNumber.textContent = countdown;
+    } else {
+      clearInterval(countdownInterval);
+      countdownOverlay.style.display = "none";
+      startBatchRecording();
+    }
+  }, 1000);
+}
+
+async function startBatchRecording() {
+  audioChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+  mediaRecorder.onstop = processBatchRecording;
+  mediaRecorder.start();
+  recording = true;
+  status.textContent = "RECORDING - say the word now!";
+
+  const duration = parseInt(durationSelect.value);
+  let remaining = duration;
+  document.getElementById("batchTimer").textContent = remaining + "s";
+
+  batchTimerInterval = setInterval(() => {
+    remaining--;
+    document.getElementById("batchTimer").textContent = remaining + "s";
+    if (remaining <= 0) {
+      clearInterval(batchTimerInterval);
+      stopBatchRecording();
+    }
+  }, 1000);
+}
+
+function stopBatchRecording() {
+  if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop();
+  recording = false;
+  document.getElementById("batchTimer").textContent = "";
+}
+
+async function processBatchRecording() {
+  status.textContent = "Processing...";
+  const rawBlob = new Blob(audioChunks, { type: "audio/webm" });
+  const processed = await processAudio(rawBlob);
+
+  const idx = batchRecordings.length;
+  batchRecordings.push({ wav: processed.wav, url: processed.url, duration: processed.duration, saved: false, discarded: false });
+
+  const item = document.createElement("div");
+  item.className = "recording-item";
+  item.innerHTML = '<span class="label">#' + (idx+1) + ' (' + processed.duration + 's)</span>' +
+    '<audio controls src="' + processed.url + '"></audio>' +
+    '<button class="keep-btn" onclick="saveBatchItem(' + idx + ')">Keep</button>' +
+    '<button class="discard-btn" onclick="discardBatchItem(' + idx + ')">Discard</button>';
+  recordingsList.appendChild(item);
+
+  status.textContent = "Recording #" + (idx+1) + " ready. Next cycle starting...";
+  document.getElementById("batchTimer").textContent = "";
+
+  // Auto-start next cycle after 2 seconds
+  if (!document.getElementById("stopBatchBtn").disabled) {
+    setTimeout(() => runBatchCycle(), 2000);
+  }
+}
+
+async function saveBatchItem(idx) {
+  const item = recordingsList.children[idx];
+  if (!item || batchRecordings[idx].saved) return;
+  await saveToServer(batchRecordings[idx].wav, wordSelect.value);
+  batchRecordings[idx].saved = true;
+  item.querySelector(".keep-btn").textContent = "Saved";
+  item.querySelector(".keep-btn").disabled = true;
+  item.querySelector(".discard-btn").disabled = true;
+  item.querySelector(".label").textContent += " SAVED";
+}
+
+function discardBatchItem(idx) {
+  const item = recordingsList.children[idx];
+  if (!item) return;
+  batchRecordings[idx].discarded = true;
+  item.style.opacity = "0.4";
+  item.querySelector(".keep-btn").disabled = true;
+  item.querySelector(".discard-btn").disabled = true;
+  item.querySelector(".label").textContent += " DISCARDED";
+}
+
+// === SHARED ===
+async function processAudio(blob) {
+  const arrayBuf = await blob.arrayBuffer();
+  audioCtx = new AudioContext({ sampleRate: 16000 });
+  const decoded = await audioCtx.decodeAudioData(arrayBuf);
+  const data = decoded.getChannelData(0);
+
+  // Trim silence
+  const threshold = 0.01;
+  let start = 0, end = data.length;
+  for (let i = 0; i < data.length; i++) { if (Math.abs(data[i]) > threshold) { start = i; break; } }
+  for (let i = data.length - 1; i >= 0; i--) { if (Math.abs(data[i]) > threshold) { end = i; break; } }
+  const pad = Math.floor(16000 * 0.1);
+  start = Math.max(0, start - pad);
+  end = Math.min(data.length, end + pad);
+  const trimmed = data.slice(start, end);
+  const duration = (trimmed.length / 16000).toFixed(2);
+
+  const wav = encodeWAV(trimmed, 16000);
+  const wavBlob = new Blob([wav], { type: "audio/wav" });
+  const url = URL.createObjectURL(wavBlob);
+  return { wav: wavBlob, url: url, duration: duration };
+}
+
+function encodeWAV(samples, sampleRate) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const ws = (off, str) => { for (let i = 0; i < str.length; i++) view.setUint8(off + i, str.charCodeAt(i)); };
+  ws(0, "RIFF"); view.setUint32(4, 36 + samples.length * 2, true); ws(8, "WAVE");
+  ws(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true); ws(36, "data"); view.setUint32(40, samples.length * 2, true);
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    offset += 2;
+  }
+  return buffer;
+}
+
+async function saveToServer(wavBlob, word) {
+  if (sampleType === "negative") {
+    const negWord = document.getElementById("negativeWord").value.trim() || "false_trigger";
+    const formData = new FormData();
+    formData.append("file", wavBlob, "negative_" + negWord + "_" + Date.now() + ".wav");
+    try {
+      const resp = await fetch("/api/upload_personal_sample", { method: "POST", body: formData });
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.saved_as) {
+          await fetch("/api/captured_audio/" + data.saved_as + "/mark_negative", { method: "POST" });
+        }
+        negSavedCount++;
+        const nc = document.getElementById("negCount");
+        if (nc) nc.textContent = negSavedCount;
+        status.textContent = "Negative sample saved! Record another false-trigger word.";
+        return true;
+      }
+    } catch (e) {
+      status.textContent = "Upload error, downloading locally: " + e.message;
+    }
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(wavBlob);
+    a.download = "negative_" + negWord + "_" + Date.now() + ".wav";
+    a.click();
+    negSavedCount++;
+    const nc = document.getElementById("negCount");
+    if (nc) nc.textContent = negSavedCount;
+    return true;
+  }
+  const formData = new FormData();
+  formData.append("file", wavBlob, word + "_real_" + Date.now() + ".wav");
+  try {
+    const resp = await fetch("/api/upload_personal_sample", { method: "POST", body: formData });
+    if (resp.ok) {
+      savedCount++; count.textContent = savedCount; count.classList.add("saved");
+      return true;
+    }
+  } catch (e) {}
+  // Fallback: download
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(wavBlob);
+  a.download = word + "_real_" + Date.now() + ".wav";
+  a.click();
+  savedCount++; count.textContent = savedCount;
+  return true;
+}
+</script>
+</body>
+</html>
