@@ -67,7 +67,7 @@ button:disabled { opacity: 0.4; cursor: default; }
   <button id="negativeTab" class="negative" onclick="setSampleType('negative')">Negative (false trigger words)</button>
 </div>
 <div id="negativeWordInput" style="display:none; margin:5px 0;">
-  <input type="text" id="negativeWord" placeholder="e.g. alexa, nikki, fred" style="font-size:1em; padding:8px; border-radius:8px; background:#16213e; color:#eee; border:1px solid #333; width:100%;">
+  <input type="text" id="negativeWord" placeholder="e.g. alexa, julie, bob" style="font-size:1em; padding:8px; border-radius:8px; background:#16213e; color:#eee; border:1px solid #333; width:100%;">
   <small style="color:#aaa;">Say these words — they should NOT trigger the wake word. Recordings go to negative_samples/.</small>
 </div>
 
@@ -137,7 +137,7 @@ function setSampleType(t) {
   const label = document.querySelector(".counter");
   if (t === "negative") {
     label.innerHTML = '<span id="negCount">0</span> negative samples saved';
-    status.textContent = "NEGATIVE mode: Record words that should NOT trigger the wake word (alexa, nikki, fred, etc.)";
+    status.textContent = "NEGATIVE mode: Record words that should NOT trigger the wake word (alexa, julie, bob, etc.)";
   } else {
     label.innerHTML = '<span id="count">' + savedCount + '</span> samples saved';
     status.textContent = "Ready";
